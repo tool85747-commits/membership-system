@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Outlets are publicly readable
+    match /outlets/{outletId} {
+      allow read: if true;
+      allow write: if false; // Only via Cloud Functions
+    }
+    
+    // Users can read their own data
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false; // Only via Cloud Functions
+    }
+    
+    // Customer profiles - users can read/update their own
+    match /customer_profile/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Customer loyalty - read only for users, write only via Cloud Functions
+    match /customer_loyalty/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false; // Only via Cloud Functions
+    }
+    
+    // Vouchers are publicly readable
+    match /vouchers/{voucherId} {
+      allow read: if true;
+      allow write: if false; // Only via Cloud Functions
+    }
+    
+    // Rewards - users can read their own
+    match /rewards/{rewardId} {
+      allow read: if request.auth != null && 
+                     request.auth.uid == resource.data.userId;
+      allow write: if false; // Only via Cloud Functions
+    }
+    
+    // Modal events - users can read their own
+    match /modalEvents/{eventId} {
+      allow read: if request.auth != null && 
+                     request.auth.uid == resource.data.userId;
+      allow write: if false; // Only via Cloud Functions
+    }
+    
+    // Audit logs - no client access
+    match /audit/{auditId} {
+      allow read, write: if false; // Only via Cloud Functions
+    }
+  }
+}

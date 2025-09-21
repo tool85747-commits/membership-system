@@ -1,35 +1,62 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Zap } from 'lucide-react';
-import { useGlobal } from '../../context/GlobalContext';
+import { staffAction } from '../../lib/firestore';
 
 export const QuickActionForm: React.FC = () => {
   const [token, setToken] = useState('');
-  const [action, setAction] = useState('add-stamp');
+  const [action, setAction] = useState<'addStamp' | 'addPoints' | 'issueRewardInstant'>('addStamp');
   const [amount, setAmount] = useState(1);
+  const [rewardTitle, setRewardTitle] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showUndo, setShowUndo] = useState(false);
-  const { onQuickAction } = useGlobal();
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token.trim()) return;
 
     setIsLoading(true);
+    setError('');
+    setSuccess('');
+
     try {
-      await onQuickAction(token.trim(), action, amount);
-      setShowUndo(true);
-      setTimeout(() => setShowUndo(false), 5 * 60 * 1000); // 5 minutes
-    } catch (error) {
+      const payload: any = {
+        token: token.trim().toUpperCase(),
+        action,
+      };
+
+      if (action === 'addStamp' || action === 'addPoints') {
+        payload.amount = amount;
+      } else if (action === 'issueRewardInstant') {
+        payload.details = { title: rewardTitle || 'Instant Reward' };
+      }
+
+      const result = await staffAction(payload);
+      
+      if (result.data?.success) {
+        setSuccess(`Action completed successfully!`);
+        setShowUndo(true);
+        setTimeout(() => setShowUndo(false), 5 * 60 * 1000); // 5 minutes
+        
+        // Reset form
+        setToken('');
+        setAmount(1);
+        setRewardTitle('');
+      }
+    } catch (error: any) {
       console.error('Quick action error:', error);
+      setError(error.message || 'Failed to complete action');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleUndo = () => {
-    // Implement undo logic
+    // TODO: Implement undo logic
     setShowUndo(false);
+    setSuccess('');
   };
 
   return (
@@ -52,6 +79,7 @@ export const QuickActionForm: React.FC = () => {
             placeholder="Enter token (e.g., ABC123)"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             required
+            disabled={isLoading}
           />
         </div>
 
@@ -62,28 +90,61 @@ export const QuickActionForm: React.FC = () => {
           <select
             id="action"
             value={action}
-            onChange={(e) => setAction(e.target.value)}
+            onChange={(e) => setAction(e.target.value as any)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={isLoading}
           >
-            <option value="add-stamp">Add Stamps</option>
-            <option value="add-points">Add Points</option>
-            <option value="redeem-voucher">Redeem Voucher</option>
+            <option value="addStamp">Add Stamps</option>
+            <option value="addPoints">Add Points</option>
+            <option value="issueRewardInstant">Issue Instant Reward</option>
           </select>
         </div>
 
-        <div>
-          <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">
-            Amount
-          </label>
-          <input
-            type="number"
-            id="amount"
-            value={amount}
-            onChange={(e) => setAmount(parseInt(e.target.value) || 1)}
-            min="1"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
+        {(action === 'addStamp' || action === 'addPoints') && (
+          <div>
+            <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">
+              Amount
+            </label>
+            <input
+              type="number"
+              id="amount"
+              value={amount}
+              onChange={(e) => setAmount(parseInt(e.target.value) || 1)}
+              min="1"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={isLoading}
+            />
+          </div>
+        )}
+
+        {action === 'issueRewardInstant' && (
+          <div>
+            <label htmlFor="rewardTitle" className="block text-sm font-medium text-gray-700 mb-1">
+              Reward Title
+            </label>
+            <input
+              type="text"
+              id="rewardTitle"
+              value={rewardTitle}
+              onChange={(e) => setRewardTitle(e.target.value)}
+              placeholder="e.g., Birthday Gift"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={isLoading}
+            />
+          </div>
+        )}
+
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+
+        {success && (
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-sm text-green-600">{success}</p>
+          </div>
+        )}
 
         <button
           type="submit"
