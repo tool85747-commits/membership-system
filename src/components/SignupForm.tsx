@@ -13,6 +13,7 @@ interface SignupFormProps {
 export const SignupForm: React.FC<SignupFormProps> = ({ onComplete }) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [consent, setConsent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -20,24 +21,36 @@ export const SignupForm: React.FC<SignupFormProps> = ({ onComplete }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !phone.trim() || !consent) return;
+    if (!name.trim() || !phone.trim() || !dateOfBirth.trim() || !consent) return;
 
     setIsLoading(true);
     setError('');
 
     try {
       // Validate phone number
+      if (!phone || phone.length < 10) {
+        throw new Error('Please enter a valid phone number');
+      }
+      
       const phoneNumber = parsePhoneNumber(phone);
       if (!phoneNumber || !phoneNumber.isValid()) {
         throw new Error('Please enter a valid phone number');
       }
 
+      // Validate date of birth
+      const birthDate = new Date(dateOfBirth);
+      const today = new Date();
+      const age = today.getFullYear() - birthDate.getFullYear();
+      if (age < 13 || age > 120) {
+        throw new Error('Please enter a valid date of birth');
+      }
       const phoneE164 = phoneNumber.format('E.164');
       
       // Create user via Cloud Function
       const result = await createUser({ 
         name: name.trim(), 
-        phoneE164 
+        phoneE164,
+        dateOfBirth: dateOfBirth
       });
 
       if (result.data) {
@@ -45,6 +58,7 @@ export const SignupForm: React.FC<SignupFormProps> = ({ onComplete }) => {
           id: result.data.userId,
           firstName: name.trim().split(' ')[0],
           phoneE164,
+          dateOfBirth,
           token: result.data.token,
           createdAt: new Date() as any
         };
@@ -97,20 +111,41 @@ export const SignupForm: React.FC<SignupFormProps> = ({ onComplete }) => {
           <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
             Phone Number
           </label>
-          <PhoneInput
-            value={phone}
-            onChange={(value) => setPhone(value || '')}
-            defaultCountry="US"
-            className="w-full"
-            inputComponent={({ className, ...props }) => (
-              <input
-                {...props}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                disabled={isLoading}
-              />
-            )}
-            placeholder="Enter your phone number"
+          <div className="relative">
+            <PhoneInput
+              value={phone}
+              onChange={(value) => setPhone(value || '')}
+              defaultCountry="US"
+              international
+              countryCallingCodeEditable={false}
+              className="phone-input-container"
+              inputComponent={React.forwardRef<HTMLInputElement, any>(({ className, ...props }, ref) => (
+                <input
+                  {...props}
+                  ref={ref}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-base"
+                  disabled={isLoading}
+                />
+              ))}
+              placeholder="Enter your phone number"
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700 mb-2">
+            Date of Birth
+          </label>
+          <input
+            type="date"
+            id="dateOfBirth"
+            value={dateOfBirth}
+            onChange={(e) => setDateOfBirth(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
             required
+            disabled={isLoading}
+            max={new Date().toISOString().split('T')[0]}
           />
         </div>
 
@@ -138,7 +173,7 @@ export const SignupForm: React.FC<SignupFormProps> = ({ onComplete }) => {
 
         <motion.button
           type="submit"
-          disabled={!name.trim() || !phone.trim() || !consent || isLoading}
+          disabled={!name.trim() || !phone.trim() || !dateOfBirth.trim() || !consent || isLoading}
           className="w-full py-3 px-4 bg-blue-600 text-white rounded-xl font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}

@@ -17,10 +17,10 @@ function generateToken(): string {
 
 // Create user function
 export const createUser = functions.https.onCall(async (data, context) => {
-  const { name, phoneE164 } = data;
+  const { name, phoneE164, dateOfBirth } = data;
 
-  if (!name || !phoneE164) {
-    throw new functions.https.HttpsError('invalid-argument', 'Name and phone are required');
+  if (!name || !phoneE164 || !dateOfBirth) {
+    throw new functions.https.HttpsError('invalid-argument', 'Name, phone, and date of birth are required');
   }
 
   try {
@@ -30,6 +30,13 @@ export const createUser = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('invalid-argument', 'Invalid phone number');
     }
 
+    // Validate date of birth
+    const birthDate = new Date(dateOfBirth);
+    const today = new Date();
+    const age = today.getFullYear() - birthDate.getFullYear();
+    if (age < 13 || age > 120) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid date of birth');
+    }
     // Check if user already exists
     const existingUser = await db.collection('users')
       .where('phoneE164', '==', phoneE164)
@@ -69,6 +76,7 @@ export const createUser = functions.https.onCall(async (data, context) => {
       id: userId,
       firstName: name.split(' ')[0],
       phoneE164,
+      dateOfBirth,
       token,
       createdAt: now
     });
@@ -81,6 +89,7 @@ export const createUser = functions.https.onCall(async (data, context) => {
         promos: true
       },
       notes: [],
+      dateOfBirth,
       lastVisitAt: now
     });
 
@@ -98,7 +107,7 @@ export const createUser = functions.https.onCall(async (data, context) => {
     batch.set(db.collection('audit').doc(), {
       actorId: 'system',
       action: 'user_created',
-      details: { userId, token, phoneE164 },
+      details: { userId, token, phoneE164, dateOfBirth },
       before: null,
       after: { userId, token },
       ts: now

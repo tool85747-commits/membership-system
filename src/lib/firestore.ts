@@ -97,7 +97,7 @@ export interface ModalEvent {
 
 // Cloud Functions
 export const createUser = httpsCallable<
-  { name: string; phoneE164: string },
+  { name: string; phoneE164: string; dateOfBirth: string },
   { userId: string; token: string }
 >(functions, 'createUser');
 
