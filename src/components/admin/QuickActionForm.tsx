@@ -2,61 +2,47 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Zap } from 'lucide-react';
 import { staffAction } from '../../lib/firestore';
+import { AsyncButton } from '../ui/AsyncButton';
 
 export const QuickActionForm: React.FC = () => {
   const [token, setToken] = useState('');
-  const [action, setAction] = useState<'addStamp' | 'addPoints' | 'issueRewardInstant'>('addStamp');
+  const [action, setAction] = useState<'addStamp' | 'addPoints' | 'issueInstantReward'>('addStamp');
   const [amount, setAmount] = useState(1);
   const [rewardTitle, setRewardTitle] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [showUndo, setShowUndo] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token.trim()) return;
+  const handleSubmit = async () => {
+    if (!token.trim()) {
+      throw new Error('Please enter a customer token');
+    }
 
-    setIsLoading(true);
-    setError('');
-    setSuccess('');
+    const payload: any = {
+      token: token.trim().toUpperCase(),
+      action,
+    };
 
-    try {
-      const payload: any = {
-        token: token.trim().toUpperCase(),
-        action,
-      };
+    if (action === 'addStamp' || action === 'addPoints') {
+      payload.amount = amount;
+    } else if (action === 'issueInstantReward') {
+      payload.rewardDetails = { title: rewardTitle || 'Instant Reward' };
+    }
 
-      if (action === 'addStamp' || action === 'addPoints') {
-        payload.amount = amount;
-      } else if (action === 'issueRewardInstant') {
-        payload.details = { title: rewardTitle || 'Instant Reward' };
-      }
-
-      const result = await staffAction(payload);
+    const result = await staffAction(payload);
+    
+    if (result.data?.success) {
+      setShowUndo(true);
+      setTimeout(() => setShowUndo(false), 5 * 60 * 1000); // 5 minutes
       
-      if (result.data?.success) {
-        setSuccess(`Action completed successfully!`);
-        setShowUndo(true);
-        setTimeout(() => setShowUndo(false), 5 * 60 * 1000); // 5 minutes
-        
-        // Reset form
-        setToken('');
-        setAmount(1);
-        setRewardTitle('');
-      }
-    } catch (error: any) {
-      console.error('Quick action error:', error);
-      setError(error.message || 'Failed to complete action');
-    } finally {
-      setIsLoading(false);
+      // Reset form
+      setToken('');
+      setAmount(1);
+      setRewardTitle('');
     }
   };
 
   const handleUndo = () => {
     // TODO: Implement undo logic
     setShowUndo(false);
-    setSuccess('');
   };
 
   return (
@@ -66,7 +52,7 @@ export const QuickActionForm: React.FC = () => {
         <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-4">
         <div>
           <label htmlFor="token" className="block text-sm font-medium text-gray-700 mb-1">
             Customer Token
@@ -79,7 +65,6 @@ export const QuickActionForm: React.FC = () => {
             placeholder="Enter token (e.g., ABC123)"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             required
-            disabled={isLoading}
           />
         </div>
 
@@ -92,11 +77,10 @@ export const QuickActionForm: React.FC = () => {
             value={action}
             onChange={(e) => setAction(e.target.value as any)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            disabled={isLoading}
           >
             <option value="addStamp">Add Stamps</option>
             <option value="addPoints">Add Points</option>
-            <option value="issueRewardInstant">Issue Instant Reward</option>
+            <option value="issueInstantReward">Issue Instant Reward</option>
           </select>
         </div>
 
@@ -112,12 +96,11 @@ export const QuickActionForm: React.FC = () => {
               onChange={(e) => setAmount(parseInt(e.target.value) || 1)}
               min="1"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
             />
           </div>
         )}
 
-        {action === 'issueRewardInstant' && (
+        {action === 'issueInstantReward' && (
           <div>
             <label htmlFor="rewardTitle" className="block text-sm font-medium text-gray-700 mb-1">
               Reward Title
@@ -129,31 +112,20 @@ export const QuickActionForm: React.FC = () => {
               onChange={(e) => setRewardTitle(e.target.value)}
               placeholder="e.g., Birthday Gift"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
             />
           </div>
         )}
 
-        {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-600">{error}</p>
-          </div>
-        )}
-
-        {success && (
-          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-sm text-green-600">{success}</p>
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={isLoading || !token.trim()}
-          className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        <AsyncButton
+          asyncFn={handleSubmit}
+          disabled={!token.trim()}
+          className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          successMsg="Action completed successfully!"
+          errorMsg="Failed to execute action"
         >
-          {isLoading ? 'Processing...' : 'Execute Action'}
-        </button>
-      </form>
+          Execute Action
+        </AsyncButton>
+      </div>
 
       {showUndo && (
         <motion.div
@@ -165,12 +137,14 @@ export const QuickActionForm: React.FC = () => {
             <p className="text-sm text-yellow-800">
               Action completed successfully
             </p>
-            <button
+            <AsyncButton
               onClick={handleUndo}
-              className="text-sm text-yellow-600 hover:text-yellow-700 font-medium"
+              variant="secondary"
+              size="sm"
+              className="text-yellow-600 hover:text-yellow-700"
             >
               Undo
-            </button>
+            </AsyncButton>
           </div>
         </motion.div>
       )}
