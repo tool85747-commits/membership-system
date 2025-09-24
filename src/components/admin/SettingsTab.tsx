@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Upload, Download, Building, Users, Palette } from 'lucide-react';
 import { useOutlet } from '../../hooks/useFirestore';
 import { useApp } from '../../context/AppContext';
-import { adminPublish, exportCsv } from '../../lib/firestore';
+import { adminPublish, exportCustomers, exportAudit, exportVoucherUsage } from '../../lib/firestore';
 
 export const SettingsTab: React.FC = () => {
   const { outletId } = useApp();
@@ -21,7 +21,18 @@ export const SettingsTab: React.FC = () => {
   const handleExport = async (type: 'customers' | 'audit' | 'vouchers') => {
     setIsExporting(type);
     try {
-      const result = await exportCsv({ type });
+      let result;
+      switch (type) {
+        case 'customers':
+          result = await exportCustomers();
+          break;
+        case 'audit':
+          result = await exportAudit();
+          break;
+        case 'vouchers':
+          result = await exportVoucherUsage();
+          break;
+      }
       
       if (result.data?.url) {
         // Trigger download

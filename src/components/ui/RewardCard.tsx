@@ -25,10 +25,12 @@ export const RewardCard: React.FC<RewardCardProps> = ({
     setError('');
     
     try {
-      await redeemReward({ 
-        userToken, 
-        rewardId: reward.id 
-      });
+      if (reward.id) {
+        await redeemReward({ 
+          userToken, 
+          rewardId: reward.id 
+        });
+      }
       setShowModal(false);
     } catch (error: any) {
       console.error('Redeem error:', error);

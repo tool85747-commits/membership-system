@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Share2, Copy, Check, Gift, Star, Wifi } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useOutlet, useCustomerLoyalty, useRewards, useContent } from '../hooks/useFirestore';
-import { GamifiedMap } from './ui/GamifiedMap.tsx';
+import { GamifiedMap } from './ui/GamifiedMap';
 import { RewardModal } from './ui/RewardModal';
 import { RewardCard } from './ui/RewardCard';
 import { HeroSection } from './ui/HeroSection';
