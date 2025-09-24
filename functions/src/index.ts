@@ -17,10 +17,10 @@ function generateToken(): string {
 
 // Create user function
 export const createUser = functions.https.onCall(async (data, context) => {
-  const { name, phoneE164, dateOfBirth } = data;
+  const { name, phoneE164 } = data;
 
-  if (!name || !phoneE164 || !dateOfBirth) {
-    throw new functions.https.HttpsError('invalid-argument', 'Name, phone, and date of birth are required');
+  if (!name || !phoneE164) {
+    throw new functions.https.HttpsError('invalid-argument', 'Name and phone are required');
   }
 
   try {
@@ -30,13 +30,6 @@ export const createUser = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('invalid-argument', 'Invalid phone number');
     }
 
-    // Validate date of birth
-    const birthDate = new Date(dateOfBirth);
-    const today = new Date();
-    const age = today.getFullYear() - birthDate.getFullYear();
-    if (age < 13 || age > 120) {
-      throw new functions.https.HttpsError('invalid-argument', 'Invalid date of birth');
-    }
     // Check if user already exists
     const existingUser = await db.collection('users')
       .where('phoneE164', '==', phoneE164)
@@ -76,7 +69,6 @@ export const createUser = functions.https.onCall(async (data, context) => {
       id: userId,
       firstName: name.split(' ')[0],
       phoneE164,
-      dateOfBirth,
       token,
       createdAt: now
     });
@@ -89,7 +81,7 @@ export const createUser = functions.https.onCall(async (data, context) => {
         promos: true
       },
       notes: [],
-      dateOfBirth,
+      memos: [],
       lastVisitAt: now
     });
 
@@ -107,7 +99,7 @@ export const createUser = functions.https.onCall(async (data, context) => {
     batch.set(db.collection('audit').doc(), {
       actorId: 'system',
       action: 'user_created',
-      details: { userId, token, phoneE164, dateOfBirth },
+      details: { userId, token, phoneE164 },
       before: null,
       after: { userId, token },
       ts: now
@@ -124,7 +116,7 @@ export const createUser = functions.https.onCall(async (data, context) => {
 
 // Staff action function
 export const staffAction = functions.https.onCall(async (data, context) => {
-  const { token, action, amount, details } = data;
+  const { token, action, amount, campaignId = 'default', rewardDetails } = data;
 
   if (!token || !action) {
     throw new functions.https.HttpsError('invalid-argument', 'Token and action are required');
@@ -155,20 +147,20 @@ export const staffAction = functions.https.onCall(async (data, context) => {
       const loyalty = loyaltyDoc.data()!;
       const before = { ...loyalty };
       let rewardIssued = false;
+      let rewardData = null;
 
       // Apply action
       switch (action) {
         case 'addStamp':
-          const currentStamps = loyalty.stamps['default'] || 0;
+          const currentStamps = loyalty.stamps[campaignId] || 0;
           const newStamps = currentStamps + (amount || 1);
-          loyalty.stamps['default'] = newStamps;
+          loyalty.stamps[campaignId] = newStamps;
           
           // Check if reward threshold reached (10 stamps)
           if (newStamps >= 10 && currentStamps < 10) {
             const rewardId = db.collection('rewards').doc().id;
             
-            // Create reward
-            transaction.set(db.collection('rewards').doc(rewardId), {
+            rewardData = {
               id: rewardId,
               userId,
               outletId: 'default',
@@ -177,7 +169,10 @@ export const staffAction = functions.https.onCall(async (data, context) => {
               issuedAt: now,
               redeemable: true,
               autoRedeem: false
-            });
+            };
+
+            // Create reward
+            transaction.set(db.collection('rewards').doc(rewardId), rewardData);
 
             // Create modal event
             transaction.set(db.collection('modalEvents').doc(), {
@@ -190,7 +185,7 @@ export const staffAction = functions.https.onCall(async (data, context) => {
             });
 
             loyalty.rewards.push(rewardId);
-            loyalty.stamps['default'] = 0; // Reset stamps
+            loyalty.stamps[campaignId] = 0; // Reset stamps
             rewardIssued = true;
           }
           break;
@@ -199,25 +194,27 @@ export const staffAction = functions.https.onCall(async (data, context) => {
           loyalty.points += (amount || 1);
           break;
 
-        case 'issueRewardInstant':
+        case 'issueInstantReward':
           const instantRewardId = db.collection('rewards').doc().id;
           
-          transaction.set(db.collection('rewards').doc(instantRewardId), {
+          rewardData = {
             id: instantRewardId,
             userId,
             outletId: 'default',
-            title: details?.title || 'Instant Reward',
-            details: details?.message || 'Special reward from staff',
+            title: rewardDetails?.title || 'Instant Reward',
+            details: rewardDetails?.message || 'Special reward from staff',
             issuedAt: now,
             redeemable: true,
             autoRedeem: false
-          });
+          };
+
+          transaction.set(db.collection('rewards').doc(instantRewardId), rewardData);
 
           transaction.set(db.collection('modalEvents').doc(), {
             userId,
             type: 'instantReward',
             rewardId: instantRewardId,
-            message: details?.message || 'You\'ve received a special reward!',
+            message: rewardDetails?.message || 'You\'ve received a special reward!',
             ts: now,
             shownAt: null
           });
@@ -239,13 +236,13 @@ export const staffAction = functions.https.onCall(async (data, context) => {
       transaction.set(db.collection('audit').doc(), {
         actorId: 'staff',
         action,
-        details: { token, amount, rewardIssued },
+        details: { token, amount, campaignId, rewardIssued },
         before,
         after: loyalty,
         ts: now
       });
 
-      return { success: true, loyalty };
+      return { success: true, loyalty, reward: rewardData };
     });
   } catch (error) {
     console.error('Staff action error:', error);
@@ -253,12 +250,12 @@ export const staffAction = functions.https.onCall(async (data, context) => {
   }
 });
 
-// Redeem voucher function
-export const redeemVoucher = functions.https.onCall(async (data, context) => {
-  const { userToken, voucherId } = data;
+// Redeem reward function
+export const redeemReward = functions.https.onCall(async (data, context) => {
+  const { userToken, rewardId } = data;
 
-  if (!userToken || !voucherId) {
-    throw new functions.https.HttpsError('invalid-argument', 'User token and voucher ID are required');
+  if (!userToken || !rewardId) {
+    throw new functions.https.HttpsError('invalid-argument', 'User token and reward ID are required');
   }
 
   try {
@@ -273,7 +270,7 @@ export const redeemVoucher = functions.https.onCall(async (data, context) => {
     }
 
     const userId = userQuery.docs[0].id;
-    const rewardRef = db.collection('rewards').doc(voucherId);
+    const rewardRef = db.collection('rewards').doc(rewardId);
     const loyaltyRef = db.collection('customer_loyalty').doc(userId);
     const now = admin.firestore.Timestamp.now();
 
@@ -312,8 +309,8 @@ export const redeemVoucher = functions.https.onCall(async (data, context) => {
       // Create audit log
       transaction.set(db.collection('audit').doc(), {
         actorId: userId,
-        action: 'redeem_voucher',
-        details: { voucherId, rewardTitle: reward.title },
+        action: 'redeem_reward',
+        details: { rewardId, rewardTitle: reward.title },
         before: { redeemedAt: null },
         after: { redeemedAt: now },
         ts: now
@@ -322,27 +319,45 @@ export const redeemVoucher = functions.https.onCall(async (data, context) => {
       return { success: true, loyalty };
     });
   } catch (error) {
-    console.error('Redeem voucher error:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to redeem voucher');
+    console.error('Redeem reward error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to redeem reward');
   }
 });
 
 // Admin publish function
 export const adminPublish = functions.https.onCall(async (data, context) => {
-  const { outletId, settings } = data;
+  const { outletId, templateJson, content, settings } = data;
 
-  if (!outletId || !settings) {
-    throw new functions.https.HttpsError('invalid-argument', 'Outlet ID and settings are required');
+  if (!outletId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Outlet ID is required');
   }
 
   try {
     const now = admin.firestore.Timestamp.now();
+    const batch = db.batch();
     
-    await db.collection('outlets').doc(outletId).set({
+    // Update outlet
+    const outletRef = db.collection('outlets').doc(outletId);
+    batch.set(outletRef, {
       id: outletId,
       ...settings,
+      published: templateJson,
       updatedAt: now
     }, { merge: true });
+
+    // Update content if provided
+    if (content && Array.isArray(content)) {
+      content.forEach((item: any) => {
+        const contentRef = db.collection('content').doc(item.id || db.collection('content').doc().id);
+        batch.set(contentRef, {
+          ...item,
+          outletId,
+          updatedAt: now
+        }, { merge: true });
+      });
+    }
+
+    await batch.commit();
 
     return { success: true };
   } catch (error) {
@@ -351,18 +366,70 @@ export const adminPublish = functions.https.onCall(async (data, context) => {
   }
 });
 
-// Export functions (simplified for demo)
-export const exportCustomers = functions.https.onCall(async (data, context) => {
+// Task complete function
+export const taskComplete = functions.https.onCall(async (data, context) => {
+  const { userToken, ruleId, clientEventToken, lat, lng } = data;
+
+  if (!userToken || !ruleId) {
+    throw new functions.https.HttpsError('invalid-argument', 'User token and rule ID are required');
+  }
+
+  try {
+    // Find user by token
+    const userQuery = await db.collection('users')
+      .where('token', '==', userToken.toUpperCase())
+      .limit(1)
+      .get();
+
+    if (userQuery.empty) {
+      throw new functions.https.HttpsError('not-found', 'User not found');
+    }
+
+    const userId = userQuery.docs[0].id;
+    const loyaltyRef = db.collection('customer_loyalty').doc(userId);
+    const now = admin.firestore.Timestamp.now();
+
+    return await db.runTransaction(async (transaction) => {
+      const loyaltyDoc = await transaction.get(loyaltyRef);
+      
+      if (!loyaltyDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Loyalty record not found');
+      }
+
+      const loyalty = loyaltyDoc.data()!;
+
+      // Simple reward for sharing
+      if (ruleId === 'share-reward') {
+        loyalty.points += 5; // Award 5 points for sharing
+        loyalty.lastActivity = now;
+
+        transaction.update(loyaltyRef, loyalty);
+
+        // Create audit log
+        transaction.set(db.collection('audit').doc(), {
+          actorId: userId,
+          action: 'task_complete',
+          details: { ruleId, clientEventToken, pointsAwarded: 5 },
+          before: { points: loyalty.points - 5 },
+          after: { points: loyalty.points },
+          ts: now
+        });
+      }
+
+      return { success: true, loyalty };
+    });
+  } catch (error) {
+    console.error('Task complete error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to complete task');
+  }
+});
+
+// Export CSV function
+export const exportCsv = functions.https.onCall(async (data, context) => {
+  const { type } = data;
+
   // In a real implementation, this would generate and return a CSV download URL
-  return { url: 'https://example.com/customers.csv' };
-});
-
-export const exportAudit = functions.https.onCall(async (data, context) => {
-  return { url: 'https://example.com/audit.csv' };
-});
-
-export const exportVoucherUsage = functions.https.onCall(async (data, context) => {
-  return { url: 'https://example.com/vouchers.csv' };
+  return { url: `https://example.com/${type}.csv` };
 });
 
 // Undo action function
