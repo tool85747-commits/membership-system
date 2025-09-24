@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Gift } from 'lucide-react';
-import { redeemVoucher, Reward } from '../../lib/firestore';
+import { redeemReward, Reward } from '../../lib/firestore';
 
 interface RewardCardProps {
   reward: Reward;
@@ -25,12 +25,10 @@ export const RewardCard: React.FC<RewardCardProps> = ({
     setError('');
     
     try {
-      if (reward.voucherId) {
-        await redeemVoucher({ 
-          userToken, 
-          voucherId: reward.voucherId 
-        });
-      }
+      await redeemReward({ 
+        userToken, 
+        rewardId: reward.id 
+      });
       setShowModal(false);
     } catch (error: any) {
       console.error('Redeem error:', error);
