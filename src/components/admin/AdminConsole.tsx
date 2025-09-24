@@ -8,7 +8,7 @@ import { SettingsTab } from './SettingsTab';
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-  { id: 'designer', label: 'Designer', icon: Palette },
+  { id: 'designer', label: 'Designer + Rules', icon: Palette },
   { id: 'vouchers', label: 'Vouchers', icon: Gift },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];

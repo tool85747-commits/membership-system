@@ -1,21 +1,20 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Share2, Copy, Check, Gift, Star, Wifi } from 'lucide-react';
+import { Share2, Copy, Check, Calendar, Gift, Star, MapPin } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { useOutlet, useCustomerLoyalty, useRewards, useContent } from '../hooks/useFirestore';
-import { GamifiedMap } from './ui/GamifiedMap';
+import { useOutlet, useCustomerLoyalty, useRewards } from '../hooks/useFirestore';
+import { GameifiedProgress } from './ui/GameifiedProgress';
+import { PointsBar } from './ui/PointsBar';
 import { RewardModal } from './ui/RewardModal';
 import { RewardCard } from './ui/RewardCard';
 import { HeroSection } from './ui/HeroSection';
-import { AsyncButton } from './ui/AsyncButton';
-import { taskComplete } from '../lib/firestore';
+import { EventsNews } from './ui/EventsNews';
 
 export const LoyaltyCard: React.FC = () => {
   const { user, outletId } = useApp();
   const { outlet } = useOutlet(outletId);
   const { loyalty } = useCustomerLoyalty(user?.id || null);
   const { rewards } = useRewards(user?.id || null);
-  const { content } = useContent(outletId);
   const [copied, setCopied] = useState(false);
 
   if (!user || !outlet || !loyalty) {
@@ -49,12 +48,6 @@ export const LoyaltyCard: React.FC = () => {
     if (navigator.share) {
       try {
         await navigator.share(shareData);
-        // Award points for sharing if configured
-        await taskComplete({
-          userToken: user.token,
-          ruleId: 'share-reward',
-          clientEventToken: Date.now().toString()
-        });
       } catch (error) {
         // User cancelled sharing
       }
@@ -67,109 +60,142 @@ export const LoyaltyCard: React.FC = () => {
   const currentStamps = loyalty.stamps['default'] || 0;
   const requiredStamps = outlet.settings.stampsRequired;
   const availableRewards = rewards.filter(r => r.redeemable && !r.redeemedAt);
+  const template = outlet.template || 'classic-progress';
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-40">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center space-x-3">
-            {outlet.logo && (
-              <img 
-                src={outlet.logo}
-                alt={outlet.name}
-                className="w-8 h-8 rounded-lg"
-              />
-            )}
-            <h1 className="font-semibold text-gray-900 text-lg">
-              {outlet.name}
-            </h1>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Wifi className="w-4 h-4 text-green-500" />
-            <span className="text-xs text-green-600">Live</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Hero Section */}
-      <HeroSection
-        heroImage={outlet.heroImage}
-        heroVideo={outlet.heroVideo}
-        businessName={outlet.name}
-        content={content}
+      {/* Hero Section with Business Branding */}
+      <HeroSection 
+        outlet={outlet}
+        user={user}
+        onCopyToken={handleCopyToken}
+        onShare={handleShare}
+        copied={copied}
       />
 
-      {/* Welcome Section */}
-      <motion.div 
-        className="px-4 py-6 text-center"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-      >
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">
-          Hi {user.firstName} 👋
-        </h2>
-        
-        {/* Token & Share */}
-        <div className="flex items-center justify-center space-x-4 mb-4">
-          <div className="flex items-center space-x-2 bg-gray-50 rounded-full px-4 py-2">
-            <span className="text-sm font-mono font-medium text-gray-700">
-              Token: {user.token}
-            </span>
-            <button
-              onClick={handleCopyToken}
-              className="p-1 rounded-full hover:bg-gray-200 transition-colors"
-              aria-label="Copy token"
-            >
-              {copied ? (
-                <Check className="w-4 h-4 text-green-600" />
-              ) : (
-                <Copy className="w-4 h-4 text-gray-500" />
-              )}
-            </button>
-          </div>
-          
-          <AsyncButton
-            asyncFn={handleShare}
-            variant="secondary"
-            size="sm"
-            className="p-2 rounded-full"
-            successMsg="Thanks for sharing!"
-          >
-            <Share2 className="w-4 h-4" />
-          </AsyncButton>
-        </div>
-      </motion.div>
+      {/* Events & News Section */}
+      <EventsNews outletId={outletId} />
 
       <div className="px-4 py-6 space-y-6">
-        {/* Gamified Map */}
+        {/* Gamified Loyalty Progress */}
         <motion.div
+          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <GamifiedMap
-            stampsRequired={requiredStamps}
-            currentStamps={currentStamps}
-            points={loyalty.points}
-            template={outlet.template}
+          <div className="flex justify-between items-center mb-4">
+            <span className="text-sm font-medium text-gray-600">
+              {template === 'map-journey' ? 'Your Journey' : 'Progress'}
+            </span>
+            <span className="text-xs text-gray-400">Live</span>
+          </div>
+
+          <GameifiedProgress 
+            count={requiredStamps}
+            filled={currentStamps}
+            accentColor={outlet.accentColor}
+            template={template}
+          />
+          
+          <div className="text-center mt-4">
+            <p className="text-sm text-gray-600">
+              {currentStamps} of {requiredStamps} stamps
+            </p>
+            {currentStamps >= requiredStamps && (
+              <motion.button
+                className="mt-3 px-6 py-2 bg-green-600 text-white rounded-full font-medium hover:bg-green-700 transition-colors"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.5 }}
+              >
+                🎉 Redeem Reward!
+              </motion.button>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Points Card */}
+        <motion.div
+          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+        >
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center space-x-2">
+              <Star className="w-4 h-4 text-yellow-500" />
+              <span className="text-sm font-medium text-gray-600">Points</span>
+            </div>
+            <span className="text-xs text-gray-400">Live</span>
+          </div>
+
+          <PointsBar 
+            current={loyalty.points}
+            max={outlet.settings.pointsRequired}
             accentColor={outlet.accentColor}
           />
         </motion.div>
 
-        {/* Earned Rewards */}
+        {/* Available Rewards Section */}
+        <motion.div
+          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+        >
+          <div className="flex items-center space-x-2 mb-4">
+            <Gift className="w-5 h-5 text-purple-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Available Rewards</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-3">
+            <div className="p-4 border border-gray-200 rounded-lg">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="font-medium text-gray-900">Free Coffee</h3>
+                  <p className="text-sm text-gray-600">Collect {requiredStamps} stamps</p>
+                </div>
+                <div className="text-right">
+                  {currentStamps >= requiredStamps ? (
+                    <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                      Ready!
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-500">
+                      {requiredStamps - currentStamps} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4 border border-gray-200 rounded-lg opacity-60">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="font-medium text-gray-900">Free Pastry</h3>
+                  <p className="text-sm text-gray-600">Collect {outlet.settings.pointsRequired} points</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-sm text-gray-500">
+                    {Math.max(0, outlet.settings.pointsRequired - loyalty.points)} more
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+        {/* Available Rewards */}
         {availableRewards.length > 0 && (
           <motion.div
             className="space-y-3"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
+            transition={{ delay: 0.6 }}
           >
-            <div className="flex items-center space-x-2">
-              <Gift className="w-5 h-5 text-purple-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Your Rewards</h2>
-            </div>
+            <h2 className="text-lg font-semibold text-gray-900">Your Earned Rewards</h2>
             {availableRewards.map((reward, index) => (
               <RewardCard 
                 key={reward.id}
@@ -181,39 +207,12 @@ export const LoyaltyCard: React.FC = () => {
           </motion.div>
         )}
 
-        {/* Quick Actions */}
-        <motion.div
-          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-          
-          <div className="grid grid-cols-2 gap-3">
-            <AsyncButton
-              asyncFn={handleShare}
-              variant="secondary"
-              className="p-4 flex flex-col items-center space-y-2"
-              successMsg="Thanks for sharing!"
-            >
-              <Share2 className="w-5 h-5" />
-              <span className="text-sm">Share & Earn</span>
-            </AsyncButton>
-            
-            <button className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex flex-col items-center space-y-2">
-              <Gift className="w-5 h-5" />
-              <span className="text-sm">Show Rewards</span>
-            </button>
-          </div>
-        </motion.div>
-
         {/* Footer */}
         <motion.div
           className="text-center text-sm text-gray-500 pt-8 border-t border-gray-100"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.6 }}
+          transition={{ delay: 0.7 }}
         >
           <div className="space-y-2">
             <p>{outlet.name}</p>
@@ -236,13 +235,12 @@ export const LoyaltyCard: React.FC = () => {
                 Contact
               </button>
             </div>
-            <p className="text-xs mt-2">Template: {outlet.template}</p>
           </div>
         </motion.div>
       </div>
 
       {/* Reward Modal */}
-      <RewardModal userId={user.id} userToken={user.token} />
+      <RewardModal userId={user.id} />
     </div>
   );
 };

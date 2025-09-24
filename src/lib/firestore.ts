@@ -29,7 +29,6 @@ export interface CustomerProfile {
     promos: boolean;
   };
   notes: string[];
-  memos: string[];
   lastVisitAt?: Timestamp;
 }
 
@@ -46,8 +45,6 @@ export interface Outlet {
   id: string;
   name: string;
   logo?: string;
-  heroImage?: string;
-  heroVideo?: string;
   contactEmail?: string;
   contactPhone?: string;
   timezone: string;
@@ -58,24 +55,7 @@ export interface Outlet {
     pointsRequired: number;
     welcomeBonusStamps: number;
     welcomeBonusPoints: number;
-    consumeOnRedeem: boolean;
   };
-  published?: any;
-  draft?: any;
-}
-
-export interface Content {
-  id: string;
-  outletId: string;
-  type: 'event' | 'news' | 'ad';
-  title: string;
-  description: string;
-  image?: string;
-  video?: string;
-  active: boolean;
-  priority: number;
-  startDate?: Timestamp;
-  endDate?: Timestamp;
 }
 
 export interface Voucher {
@@ -117,45 +97,43 @@ export interface ModalEvent {
 
 // Cloud Functions
 export const createUser = httpsCallable<
-  { name: string; phoneE164: string },
+  { name: string; phoneE164: string; dateOfBirth: string },
   { userId: string; token: string }
 >(functions, 'createUser');
 
 export const staffAction = httpsCallable<
   { 
     token: string; 
-    action: 'addStamp' | 'addPoints' | 'issueInstantReward'; 
+    action: 'addStamp' | 'addPoints' | 'issueRewardInstant'; 
     amount?: number; 
-    campaignId?: string;
-    rewardDetails?: any;
+    details?: any 
   },
-  { success: boolean; loyalty: CustomerLoyalty; reward?: Reward }
+  { success: boolean; loyalty: CustomerLoyalty }
 >(functions, 'staffAction');
 
-export const redeemReward = httpsCallable<
-  { userToken: string; rewardId: string },
+export const redeemVoucher = httpsCallable<
+  { userToken: string; voucherId: string },
   { success: boolean; loyalty: CustomerLoyalty }
->(functions, 'redeemReward');
+>(functions, 'redeemVoucher');
+
+export const issueInstantReward = httpsCallable<
+  { token: string; rewardDetails: { title: string; message?: string } },
+  { success: boolean; rewardId: string }
+>(functions, 'issueInstantReward');
 
 export const adminPublish = httpsCallable<
-  { outletId: string; templateJson: any; content?: any; settings?: any },
+  { outletId: string; settings: Partial<Outlet> },
   { success: boolean }
 >(functions, 'adminPublish');
 
-export const exportCsv = httpsCallable<
-  { type: 'customers' | 'audit' | 'vouchers' },
-  { url: string }
->(functions, 'exportCsv');
+export const exportCustomers = httpsCallable<{}, { url: string }>(functions, 'exportCustomers');
+export const exportAudit = httpsCallable<{}, { url: string }>(functions, 'exportAudit');
+export const exportVoucherUsage = httpsCallable<{}, { url: string }>(functions, 'exportVoucherUsage');
 
 export const undoAction = httpsCallable<
   { actionId: string },
   { success: boolean }
 >(functions, 'undoAction');
-
-export const taskComplete = httpsCallable<
-  { userToken: string; ruleId: string; clientEventToken?: string; lat?: number; lng?: number },
-  { success: boolean; loyalty: CustomerLoyalty }
->(functions, 'taskComplete');
 
 // Firestore subscriptions
 export const subscribeToOutlet = (outletId: string, callback: (outlet: Outlet | null) => void) => {
@@ -203,21 +181,6 @@ export const subscribeToRewards = (userId: string, callback: (rewards: Reward[])
   return onSnapshot(q, (snapshot) => {
     const rewards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reward));
     callback(rewards);
-  });
-};
-
-export const subscribeToContent = (outletId: string, callback: (content: Content[]) => void) => {
-  const q = query(
-    collection(db, 'content'),
-    where('outletId', '==', outletId),
-    where('active', '==', true),
-    orderBy('priority', 'desc'),
-    orderBy('startDate', 'desc')
-  );
-  
-  return onSnapshot(q, (snapshot) => {
-    const content = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Content));
-    callback(content);
   });
 };
 

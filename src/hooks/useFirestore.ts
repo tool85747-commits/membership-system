@@ -4,30 +4,26 @@ import {
   subscribeToCustomerLoyalty, 
   subscribeToModalEvents, 
   subscribeToRewards,
-  subscribeToContent,
   Outlet,
   CustomerLoyalty,
   ModalEvent,
-  Reward,
-  Content
+  Reward
 } from '../lib/firestore';
 
 export const useOutlet = (outletId: string) => {
   const [outlet, setOutlet] = useState<Outlet | null>(null);
   const [loading, setLoading] = useState(true);
-  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToOutlet(outletId, (data) => {
       setOutlet(data);
       setLoading(false);
-      setConnected(true);
     });
 
     return unsubscribe;
   }, [outletId]);
 
-  return { outlet, loading, connected };
+  return { outlet, loading };
 };
 
 export const useCustomerLoyalty = (userId: string | null) => {
@@ -83,20 +79,4 @@ export const useRewards = (userId: string | null) => {
   }, [userId]);
 
   return { rewards, loading };
-};
-
-export const useContent = (outletId: string) => {
-  const [content, setContent] = useState<Content[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsubscribe = subscribeToContent(outletId, (data) => {
-      setContent(data);
-      setLoading(false);
-    });
-
-    return unsubscribe;
-  }, [outletId]);
-
-  return { content, loading };
 };

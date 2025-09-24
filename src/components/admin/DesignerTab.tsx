@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Save, Eye, Palette, Upload } from 'lucide-react';
+import { Save, Eye, Palette } from 'lucide-react';
 import { useOutlet } from '../../hooks/useFirestore';
 import { useApp } from '../../context/AppContext';
 import { adminPublish } from '../../lib/firestore';
-import { AsyncButton } from '../ui/AsyncButton';
 
 const templates = [
   { id: 'classic-progress', name: 'Classic Progress', description: 'Standard stamp grid or point bar' },
@@ -13,47 +12,39 @@ const templates = [
   { id: 'event-focused', name: 'Event-Focused', description: 'Centered around events/promotions' },
   { id: 'wallet-card', name: 'Wallet Card', description: 'Digital membership card style' },
 ];
-
 export const DesignerTab: React.FC = () => {
   const { outletId } = useApp();
   const { outlet } = useOutlet(outletId);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [isDraft, setIsDraft] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState(outlet?.template || 'classic-progress');
   const [settings, setSettings] = useState({
-    name: outlet?.name || 'My Loyalty Program',
-    stampsRequired: outlet?.settings?.stampsRequired || 10,
-    pointsRequired: outlet?.settings?.pointsRequired || 1000,
-    welcomeBonusStamps: outlet?.settings?.welcomeBonusStamps || 0,
-    welcomeBonusPoints: outlet?.settings?.welcomeBonusPoints || 10,
-    consumeOnRedeem: outlet?.settings?.consumeOnRedeem || true,
+    stampsRequired: 10,
+    pointsRequired: 1000,
+    welcomeBonusStamps: 0,
+    welcomeBonusPoints: 10,
     heroImage: outlet?.heroImage || '',
-    heroVideo: outlet?.heroVideo || '',
-    accentColor: outlet?.accentColor || '#2B8AEF',
   });
 
   const handlePublish = async () => {
-    await adminPublish({
-      outletId,
-      templateJson: {
-        template: selectedTemplate,
-        ...settings
-      },
-      settings: {
-        ...settings,
-        template: selectedTemplate,
+    setIsPublishing(true);
+    try {
+      await adminPublish({
+        outletId,
         settings: {
-          stampsRequired: settings.stampsRequired,
-          pointsRequired: settings.pointsRequired,
-          welcomeBonusStamps: settings.welcomeBonusStamps,
-          welcomeBonusPoints: settings.welcomeBonusPoints,
-          consumeOnRedeem: settings.consumeOnRedeem,
+          template: selectedTemplate,
+          settings,
         }
-      }
-    });
-    setIsDraft(false);
+      });
+      setIsDraft(false);
+    } catch (error) {
+      console.error('Publish error:', error);
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
-  const handleSettingChange = (key: string, value: any) => {
+  const handleSettingChange = (key: string, value: number) => {
     setSettings(prev => ({ ...prev, [key]: value }));
     setIsDraft(true);
   };
@@ -62,7 +53,6 @@ export const DesignerTab: React.FC = () => {
     setSelectedTemplate(templateId);
     setIsDraft(true);
   };
-
   return (
     <div className="space-y-6">
       {/* Template Selection */}
@@ -98,40 +88,6 @@ export const DesignerTab: React.FC = () => {
           ))}
         </div>
       </div>
-
-      {/* Hero Content */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Hero Content</h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Hero Image URL
-            </label>
-            <input
-              type="url"
-              value={settings.heroImage}
-              onChange={(e) => handleSettingChange('heroImage', e.target.value)}
-              placeholder="https://example.com/hero-image.jpg"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Hero Video URL
-            </label>
-            <input
-              type="url"
-              value={settings.heroVideo}
-              onChange={(e) => handleSettingChange('heroVideo', e.target.value)}
-              placeholder="https://example.com/hero-video.mp4"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Loyalty Settings */}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Loyalty Settings</h3>
@@ -190,59 +146,19 @@ export const DesignerTab: React.FC = () => {
           </div>
 
           <div className="md:col-span-2">
-            <label className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={settings.consumeOnRedeem}
-                onChange={(e) => handleSettingChange('consumeOnRedeem', e.target.checked)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <span className="text-sm font-medium text-gray-700">
-                Consume stamps/points on redeem
-              </span>
-            </label>
-            <p className="text-sm text-gray-500 mt-1">
-              If enabled, stamps/points will be deducted when rewards are redeemed
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Brand Settings */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Brand Settings</h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Business Name
+              Hero Image URL
             </label>
             <input
-              type="text"
-              value={settings.name}
-              onChange={(e) => handleSettingChange('name', e.target.value)}
+              type="url"
+              value={settings.heroImage}
+              onChange={(e) => handleSettingChange('heroImage', e.target.value)}
+              placeholder="https://example.com/hero-image.jpg"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Primary Accent Color
-            </label>
-            <div className="flex items-center space-x-3">
-              <input
-                type="color"
-                value={settings.accentColor}
-                onChange={(e) => handleSettingChange('accentColor', e.target.value)}
-                className="w-12 h-10 rounded-lg border border-gray-300 cursor-pointer"
-              />
-              <input
-                type="text"
-                value={settings.accentColor}
-                onChange={(e) => handleSettingChange('accentColor', e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+            <p className="text-sm text-gray-500 mt-1">
+              Enter a URL for the hero image that appears at the top of the customer page
+            </p>
           </div>
         </div>
       </div>
@@ -260,25 +176,34 @@ export const DesignerTab: React.FC = () => {
           </div>
 
           <div className="flex space-x-3">
-            <AsyncButton
+            <button
               onClick={() => setIsDraft(false)}
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               disabled={!isDraft}
-              variant="secondary"
-              className="px-4 py-2"
             >
               <Save className="w-4 h-4 inline mr-2" />
               Save Draft
-            </AsyncButton>
+            </button>
             
-            <AsyncButton
-              asyncFn={handlePublish}
-              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700"
-              successMsg="Changes published successfully!"
-              errorMsg="Failed to publish changes"
+            <motion.button
+              onClick={handlePublish}
+              disabled={isPublishing}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              <Eye className="w-4 h-4 inline mr-2" />
-              Publish Changes
-            </AsyncButton>
+              {isPublishing ? (
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Publishing...</span>
+                </div>
+              ) : (
+                <>
+                  <Eye className="w-4 h-4 inline mr-2" />
+                  Publish Changes
+                </>
+              )}
+            </motion.button>
           </div>
         </div>
       </div>
